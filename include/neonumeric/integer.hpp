@@ -42,8 +42,8 @@
 #include <iostream>
 #include <iomanip>
 #include <neonumeric/neonumeric.hpp>
+#include <neonumeric/vecarray.hpp>
 #include <neonumeric/exceptions.hpp>
-#include <neonumeric/alloc.hpp>
 #include <neonumeric/algorithm.hpp>
 
 namespace neonumeric
@@ -65,25 +65,7 @@ namespace neonumeric
     inline T integer_cast(const xinteger<Size, Type, Signalling, SmallBufferSize>& aValue);
 
     template <typename T, std::size_t SmallBufferSize>
-    class fast_vector : private small_buffer_allocator<T, SmallBufferSize>::small_buffer_type, public std::vector<T, small_buffer_allocator<T, SmallBufferSize>>
-    {
-    public:
-        typedef small_buffer_allocator<T, SmallBufferSize> allocator_type;
-    private:
-        typedef typename small_buffer_allocator<T, SmallBufferSize>::small_buffer_type small_buffer_type;
-        typedef std::vector<T, small_buffer_allocator<T, SmallBufferSize>> container_type;
-    public:
-        fast_vector() :
-            container_type{ allocator_type{ *this } }
-        {
-            container_type::reserve(SmallBufferSize);
-        }
-    public:
-        bool using_small_buffer() const
-        {
-            return small_buffer_type::allocated;
-        }
-    };
+    using fast_vector = vecarray<T, SmallBufferSize, -1>;
 
     template <typename WordType, uint32_t Size, std::size_t>
     struct storage_traits
@@ -167,35 +149,23 @@ namespace neonumeric
             assign(aNatives.begin(), aNatives.end());
         }
         xinteger(const self_type& aOther) :
+            iWords{ aOther.iWords },
             iSignal{ aOther.iSignal },
             iNegative{ aOther.iNegative },
             iMagnitude{ aOther.iMagnitude },
             iMagnitudeInBits{ aOther.iMagnitudeInBits },
             iRepetend{ aOther.iRepetend }
         {
-            if (aOther.iWords != std::nullopt)
-            {
-                if constexpr (!FixedSize)
-                    words().reserve(std::max(SmallBufferSize, aOther.words().capacity()));
-                words() = aOther.words();
-            }
+            words() = aOther.words();
         }
         xinteger(self_type&& aOther) :
+            iWords{ std::move(aOther.iWords) },
             iSignal{ std::move(aOther.iSignal) },
             iNegative{ aOther.iNegative },
             iMagnitude{ aOther.iMagnitude },
             iMagnitudeInBits{ aOther.iMagnitudeInBits },
             iRepetend{ aOther.iRepetend }
         {
-            if constexpr (!FixedSize)
-            {
-                if (aOther.iWords != std::nullopt && !aOther.iWords->using_small_buffer())
-                    iWords = std::move(aOther.iWords);
-                else
-                    iWords = aOther.iWords;
-            }
-            else
-                iWords = aOther.iWords;
         }
         xinteger(const representation_t& aRepresentation) :
             iNegative{ false }
@@ -219,14 +189,7 @@ namespace neonumeric
         {
             if (&aOther == this)
                 return *this;
-            if (aOther.iWords != std::nullopt)
-            {
-                if constexpr (!FixedSize)
-                    words().reserve(std::max(SmallBufferSize, aOther.words().capacity()));
-                words() = aOther.words();
-            }
-            else
-                iWords = std::nullopt;
+            words() = aOther.words();
             iNegative = aOther.iNegative;
             iSignal = aOther.iSignal;
             iMagnitude = aOther.iMagnitude;
@@ -239,12 +202,7 @@ namespace neonumeric
             if (&aOther == this)
                 return *this;
             if constexpr (!FixedSize)
-            {
-                if (aOther.iWords != std::nullopt && !aOther.iWords->using_small_buffer())
-                    iWords = std::move(aOther.iWords);
-                else
-                    iWords = aOther.iWords;
-            }
+                iWords = std::move(aOther.iWords);
             else
                 iWords = aOther.iWords;
             iNegative = aOther.iNegative;
