@@ -65,7 +65,7 @@ namespace neonumeric
     inline T integer_cast(const xinteger<Size, Type, Signalling, SmallBufferSize>& aValue);
 
     template <typename T, std::size_t SmallBufferSize>
-    using fast_vector = vecarray<T, SmallBufferSize, -1>;
+    using fast_vector = vecarray<T, SmallBufferSize, ~std::size_t{}>;
 
     template <typename WordType, uint32_t Size, std::size_t>
     struct storage_traits
