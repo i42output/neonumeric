@@ -330,7 +330,7 @@ namespace neonumeric
                 thread_local signed_type signedLhs;
                 thread_local signed_type signedRhs;
                 bool const sameMag = (xinteger_detail<XInteger>::magnitude(lhs) == xinteger_detail<XInteger>::magnitude(rhs));
-                typename xinteger_detail<signed_type>::to_unsigned(result, subtract_algorithm_0(xinteger_detail<XInteger>::to_signed(signedLhs, lhs, true, !sameMag), xinteger_detail<XInteger>::to_signed(signedRhs, rhs, true, !sameMag), aOverflow), false);
+                xinteger_detail<signed_type>::to_unsigned(result, subtract_algorithm_0(xinteger_detail<XInteger>::to_signed(signedLhs, lhs, true, !sameMag), xinteger_detail<XInteger>::to_signed(signedRhs, rhs, true, !sameMag), aOverflow), false);
             }
             return result;
         }

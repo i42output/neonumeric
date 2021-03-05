@@ -452,7 +452,7 @@ namespace neonumeric
         static self_type from_string(const std::string& aString, uint32_t aBase = 10u)
         {
             std::optional<uint32_t> fractionalPlaces;
-            auto signedResult = signed_integer_type::from_string<true>(aString, aBase, fractionalPlaces);;
+            auto signedResult = signed_integer_type::template from_string<true>(aString, aBase, fractionalPlaces);;
             self_type result;
             result = signedResult.to_unsigned(true);
             result.set_precision(static_cast<precision_t>(result.mantissa().magnitude() * architecture_t::WordBits));
@@ -893,7 +893,7 @@ namespace neonumeric
 
             // todo: power of 2 division shortcuts
 
-            // Newton–Raphson... (TODO)
+            // Newton\96Raphson... (TODO)
 
             auto& x = aCoefficient;
             if (x == zero)
@@ -918,8 +918,8 @@ namespace neonumeric
 
             return result;
         }
-        template <uint32_t Size, integer_type Type, bool Signalling, std::size_t SmallBufferSize>
-        static self_type fraction_algorithm_0(const xinteger<Size, Type, Signalling, SmallBufferSize>& aLhs, const xinteger<Size, Type, Signalling, SmallBufferSize>& aRhs)
+        template <uint32_t Size2, integer_type Type2, bool Signalling2, std::size_t SmallBufferSize2>
+        static self_type fraction_algorithm_0(const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aLhs, const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aRhs)
         {
             if constexpr (aLhs.IsSigned)
             {
@@ -929,13 +929,13 @@ namespace neonumeric
             else
                 return fraction_algorithm_1(aLhs, aRhs);
         }
-        template <uint32_t Size, integer_type Type, bool Signalling, std::size_t SmallBufferSize>
-        static self_type fraction_algorithm_1(const xinteger<Size, Type, Signalling, SmallBufferSize>& aLhs, const xinteger<Size, Type, Signalling, SmallBufferSize>& aRhs)
+        template <uint32_t Size2, integer_type Type2, bool Signalling2, std::size_t SmallBufferSize2>
+        static self_type fraction_algorithm_1(const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aLhs, const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aRhs)
         {
             static mantissa_t const zero = Zero;
             static mantissa_t const one = One;
 
-            xinteger<Size, Type, Signalling, SmallBufferSize> r;
+            xinteger<Size2, Type2, Signalling2, SmallBufferSize2> r;
             auto qint = divide_algorithm_1(aLhs, aRhs, r);
 
             auto const d = aRhs;
