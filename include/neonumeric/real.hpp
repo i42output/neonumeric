@@ -183,6 +183,8 @@ namespace neonumeric
                 return is_positive() ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
             case special::NaN:
                 return std::numeric_limits<double>::quiet_NaN();
+            default:
+            	break;
             }
             if (is_zero())
                 return 0.0;
@@ -481,6 +483,8 @@ namespace neonumeric
                 return is_positive() ? "inf" : "-inf";
             case special::NaN:
                 return "nan";
+            default:
+            	break;
             }
 
             std::string digits;
@@ -921,7 +925,7 @@ namespace neonumeric
         template <uint32_t Size2, integer_type Type2, bool Signalling2, std::size_t SmallBufferSize2>
         static self_type fraction_algorithm_0(const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aLhs, const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aRhs)
         {
-            if constexpr (aLhs.IsSigned)
+            if constexpr (std::remove_reference_t<decltype(aLhs)>::IsSigned)
             {
                 auto result = fraction_algorithm_1(aLhs.to_unsigned(true), aRhs.to_unsigned(true));
                 return result;
