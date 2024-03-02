@@ -99,6 +99,9 @@ namespace neonumeric
     template <typename XInteger>
     using xinteger_t = typename as_xinteger<XInteger>::type;
 
+    template <typename T, uint32_t Size, integer_type Type, bool Signalling, std::size_t SmallBufferSize>
+    inline T integer_cast(const xinteger<Size, Type, Signalling, SmallBufferSize>& aValue);
+
     template <typename XInteger>
     struct xinteger_traits
     {
