@@ -624,9 +624,7 @@ namespace neonumeric
     {
         // todo
 
-        XInteger result;
-        result = aLhs;
-        return multiply_algorithm_karatsuba(result, aRhs);
+        return multiply_algorithm_karatsuba(aLhs, aRhs);
     }
 
     template <typename XInteger>
