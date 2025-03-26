@@ -183,6 +183,14 @@ namespace neonumeric
         {
             assign(aFirst, aLast);
         }
+        xinteger(const std::string_view& aString) :
+            xinteger{ from_string(aString) }
+        {
+        }
+        xinteger(const std::string& aString) :
+            xinteger{ from_string(aString) }
+        {
+        }
     public:
         xinteger& operator=(const xinteger& aOther)
         {
@@ -462,6 +470,10 @@ namespace neonumeric
     public:
         static xinteger from_string(const std::string& aString, uint32_t aBase = 10u)
         {
+            return from_string(std::string_view{ aString }, aBase);
+        }
+        static xinteger from_string(const std::string_view& aString, uint32_t aBase = 10u)
+        {
             std::optional<uint32_t> ignore;
             return from_string<>(aString, aBase, ignore);
         }
@@ -539,7 +551,7 @@ namespace neonumeric
             return *this == zero;
         }
         template <bool AsFloatingPoint = false>
-        static xinteger from_string(const std::string& aString, uint32_t aBase, std::optional<uint32_t>& aFractionalPlaces)
+        static xinteger from_string(const std::string_view& aString, uint32_t aBase, std::optional<uint32_t>& aFractionalPlaces)
         {
             static xinteger const zero = Zero;
 

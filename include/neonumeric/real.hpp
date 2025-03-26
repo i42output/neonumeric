@@ -121,6 +121,14 @@ namespace neonumeric
         {
             *this = aInteger;
         }
+        xreal(const std::string_view& aString) :
+            xreal{ from_string(aString) }
+        {
+        }
+        xreal(const std::string& aString) :
+            xreal{ from_string(aString) }
+        {
+        }
     public:
         xreal& operator=(const xreal& aOther)
         {
@@ -450,6 +458,10 @@ namespace neonumeric
             set_precision(iPrecision == std::nullopt ? aPrecision : std::max(*iPrecision, aPrecision));
         }
         static xreal from_string(const std::string& aString, uint32_t aBase = 10u)
+        {
+            return from_string(std::string_view{ aString });
+        }
+        static xreal from_string(const std::string_view& aString, uint32_t aBase = 10u)
         {
             std::optional<uint32_t> fractionalPlaces;
             auto signedResult = signed_integer_type::template from_string<true>(aString, aBase, fractionalPlaces);;
