@@ -55,8 +55,6 @@ namespace neonumeric
     {
         template <typename RealType, typename IntegerType>
         friend RealType frac(const IntegerType&, const IntegerType&);
-    private:
-        typedef xreal<Size, MantissaSize, ExponentSize, Signalling, SmallBufferSize> self_type;
     public:
         typedef xinteger<Size, integer_type::Signed, Signalling, SmallBufferSize> signed_integer_type;
         typedef xinteger<Size, integer_type::Unsigned, Signalling, SmallBufferSize> unsigned_integer_type;
@@ -89,7 +87,7 @@ namespace neonumeric
         xreal()
         {
         }
-        xreal(const self_type& aOther) :
+        xreal(const xreal& aOther) :
             iSignBit{ aOther.iSignBit },
             iSpecial{ aOther.iSpecial },
             iExponent{ aOther.iExponent },
@@ -98,7 +96,7 @@ namespace neonumeric
             iPrecision{ aOther.iPrecision }
         {
         }
-        xreal(self_type&& aOther) :
+        xreal(xreal&& aOther) :
             iSignBit{ aOther.iSignBit },
             iSpecial{ aOther.iSpecial },
             iExponent{ std::move(aOther.iExponent) },
@@ -124,7 +122,7 @@ namespace neonumeric
             *this = aInteger;
         }
     public:
-        self_type& operator=(const self_type& aOther)
+        xreal& operator=(const xreal& aOther)
         {
             if (&aOther == this)
                 return *this;
@@ -137,7 +135,7 @@ namespace neonumeric
                 set_precision_at_least(*aOther.iPrecision);
             return *this;
         }
-        self_type& operator=(self_type&& aOther)
+        xreal& operator=(xreal&& aOther)
         {
             if (&aOther == this)
                 return *this;
@@ -150,25 +148,25 @@ namespace neonumeric
                 set_precision_at_least(*aOther.iPrecision);
             return *this;
         }
-        self_type& operator=(double aNativeFloat)
+        xreal& operator=(double aNativeFloat)
         {
             float_assign(aNativeFloat);
             return *this;
         }
-        self_type& operator=(const signed_integer_type& aInteger)
+        xreal& operator=(const signed_integer_type& aInteger)
         {
             word_t ignore;
             integer_assign(aInteger, ignore);
             update_mantissa_precision();
             return *this;
         }
-        self_type& operator=(const unsigned_integer_type& aInteger)
+        xreal& operator=(const unsigned_integer_type& aInteger)
         {
             *this = aInteger.to_signed(true);
             update_mantissa_precision();
             return *this;
         }
-        self_type& operator=(word_t aInteger)
+        xreal& operator=(word_t aInteger)
         {
             *this = integer_t{ aInteger };
             update_mantissa_precision();
@@ -234,7 +232,7 @@ namespace neonumeric
         {
             return !is_zero();
         }
-        friend bool operator==(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator==(const xreal& aLhs, const xreal& aRhs)
         {
             static mantissa_t const zero = mantissa_t::Zero;
             return (aLhs.mantissa() == zero && aRhs.mantissa() == zero) ||
@@ -242,11 +240,11 @@ namespace neonumeric
                 aLhs.normalized_exponent() == aRhs.normalized_exponent() && 
                 aLhs.normalized_mantissa() == aRhs.normalized_mantissa());
         }
-        friend bool operator!=(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator!=(const xreal& aLhs, const xreal& aRhs)
         {
             return !(aLhs == aRhs);
         }
-        friend bool operator<(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator<(const xreal& aLhs, const xreal& aRhs)
         {
             if (aLhs.is_positive() != aRhs.is_positive())
                 return aLhs.is_negative();
@@ -260,90 +258,90 @@ namespace neonumeric
                 return false;
             return false;
         }
-        friend bool operator<=(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator<=(const xreal& aLhs, const xreal& aRhs)
         {
             return !(aRhs < aLhs);
         }
-        friend bool operator>(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator>(const xreal& aLhs, const xreal& aRhs)
         {
             return aRhs < aLhs;
         }
-        friend bool operator>=(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator>=(const xreal& aLhs, const xreal& aRhs)
         {
             return !(aLhs < aRhs);
         }
     public:
-        friend self_type operator+(const self_type& aLhs, const self_type& aRhs)
+        friend xreal operator+(const xreal& aLhs, const xreal& aRhs)
         {
-            self_type result = aLhs;
+            xreal result = aLhs;
             result += aRhs;
             return result;
         }
-        friend self_type operator-(const self_type& aLhs, const self_type& aRhs)
+        friend xreal operator-(const xreal& aLhs, const xreal& aRhs)
         {
-            self_type result = aLhs;
+            xreal result = aLhs;
             result -= aRhs;
             return result;
         }
-        self_type operator-() const
+        xreal operator-() const
         {
-            self_type result;
+            xreal result;
             result.mantissa() = negate(mantissa());
             result.exponent() = exponent();
             return result;
         }
-        friend self_type operator*(const self_type& aLhs, const self_type& aRhs)
+        friend xreal operator*(const xreal& aLhs, const xreal& aRhs)
         {
-            self_type result = aLhs;
+            xreal result = aLhs;
             result *= aRhs;
             return result;
         }
-        friend self_type operator/(const self_type& aLhs, const self_type& aRhs)
+        friend xreal operator/(const xreal& aLhs, const xreal& aRhs)
         {
-            self_type result = aLhs;
+            xreal result = aLhs;
             result /= aRhs;
             return result;
         }
-        friend self_type operator%(const self_type& aLhs, const self_type& aRhs)
+        friend xreal operator%(const xreal& aLhs, const xreal& aRhs)
         {
-            self_type result = aLhs;
+            xreal result = aLhs;
             result %= aRhs;
             return result;
         }
-        self_type& operator+=(const self_type& aRhs)
+        xreal& operator+=(const xreal& aRhs)
         {
             return add_subtract_algorithm_0<true>(aRhs);
         }
-        self_type& operator-=(const self_type& aRhs)
+        xreal& operator-=(const xreal& aRhs)
         {
             return add_subtract_algorithm_0<false>(aRhs);
         }
-        self_type& operator*=(const self_type& aRhs)
+        xreal& operator*=(const xreal& aRhs)
         {
             return multiply_algorithm_0(aRhs);
         }
-        self_type& operator/=(const self_type& aRhs)
+        xreal& operator/=(const xreal& aRhs)
         {
             bool const resultNegative = (is_positive() != aRhs.is_positive());
             division_algorithm_0(aRhs);
             set_negative(resultNegative);
             return *this;
         }
-        self_type& operator%=(const self_type& aRhs)
+        xreal& operator%=(const xreal& aRhs)
         {
-            self_type remainder;
+            xreal remainder;
             div2(aRhs, remainder);
             return *this = remainder;
         }
-        self_type& div2(const self_type& aRhs, self_type& aRemainder)
+        xreal& div2(const xreal& aRhs, xreal& aRemainder)
         {
-            self_type ignore;
+            xreal ignore;
             return div3(aRhs, aRemainder, ignore);
         }
-        self_type& div3(const self_type& aRhs, self_type& aRemainder, self_type& aCoefficient)
+        xreal& div3(const xreal& aRhs, xreal& aRemainder, xreal& aCoefficient)
         {
             auto const maxMagnitude = std::min(precision_magnitude(), std::max(mantissa().magnitude(), aRhs.mantissa().magnitude()));
-            static const self_type zero = Zero;
+            static const xreal zero = Zero;
             signed_integer_type const integerNumerator = *this;
             signed_integer_type const integerDenominator = aRhs;
             if (aRhs == zero)
@@ -384,35 +382,35 @@ namespace neonumeric
             }
             return *this;
         }
-        self_type& operator++()
+        xreal& operator++()
         {
-            static self_type const one = One;
+            static xreal const one = One;
             *this += one;
             return *this;
         }
-        self_type operator++(int)
+        xreal operator++(int)
         {
-            static self_type const one = One;
+            static xreal const one = One;
             auto previous = *this;
             *this += one;
             return previous;
         }
-        self_type& operator--()
+        xreal& operator--()
         {
-            static self_type const one = One;
+            static xreal const one = One;
             *this -= one;
             return *this;
         }
-        self_type operator--(int)
+        xreal operator--(int)
         {
-            static self_type const one = One;
+            static xreal const one = One;
             auto previous = *this;
             *this -= one;
             return previous;
         }
     public:
         template <typename Exception>
-        const self_type& raise_signal(bool aForceThrow = false) const
+        const xreal& raise_signal(bool aForceThrow = false) const
         {
             iSignal = Exception{}.what();
             if (Signalling || aForceThrow)
@@ -420,9 +418,9 @@ namespace neonumeric
             return *this;
         }
         template <typename Exception>
-        self_type& raise_signal()
+        xreal& raise_signal()
         {
-            return const_cast<self_type&>(const_cast<const self_type*>(this)->raise_signal<Exception>());
+            return const_cast<xreal&>(const_cast<const xreal*>(this)->raise_signal<Exception>());
         }
         bool is_signalled() const
         {
@@ -451,28 +449,28 @@ namespace neonumeric
         {
             set_precision(iPrecision == std::nullopt ? aPrecision : std::max(*iPrecision, aPrecision));
         }
-        static self_type from_string(const std::string& aString, uint32_t aBase = 10u)
+        static xreal from_string(const std::string& aString, uint32_t aBase = 10u)
         {
             std::optional<uint32_t> fractionalPlaces;
             auto signedResult = signed_integer_type::template from_string<true>(aString, aBase, fractionalPlaces);;
-            self_type result;
+            xreal result;
             result = signedResult.to_unsigned(true);
             result.set_precision(static_cast<precision_t>(result.mantissa().magnitude() * architecture_t::WordBits));
             if (signedResult.is_negative())
                 result.set_negative();
             if (fractionalPlaces)
             {
-                self_type const d{ pow(integer_t{ aBase }, *fractionalPlaces) };
+                xreal const d{ pow(integer_t{ aBase }, *fractionalPlaces) };
                 result /= d;
             }
             return result;
         }
         std::string to_string(uint32_t aBase = 10u, precision_t aPrecision = std::numeric_limits<double>::digits10 + 1, uint32_t aGrouping = 0u) const
         {
-            static self_type const zero = Zero;
+            static xreal const zero = Zero;
 
-            self_type const base = aBase;
-            self_type digitValue;
+            xreal const base = aBase;
+            xreal digitValue;
 
             if (is_signalled())
                 return "sNaN";
@@ -489,15 +487,15 @@ namespace neonumeric
 
             std::string digits;
 
-            self_type value = *this;
+            xreal value = *this;
             value.set_positive();
 
             auto const integerValue = static_cast<signed_integer_type>(value);
-            value -= self_type{ integerValue };
+            value -= xreal{ integerValue };
             if (aPrecision > 0u && value != zero)
             {
-                self_type round = (aBase == 2 ? One : base / 2);
-                round /= self_type{ pow(integer_t{ aBase }, integer_t{ aPrecision + 1u }) };
+                xreal round = (aBase == 2 ? One : base / 2);
+                round /= xreal{ pow(integer_t{ aBase }, integer_t{ aPrecision + 1u }) };
                 value += round;
             }
             while (aPrecision-- > 0u)
@@ -519,7 +517,7 @@ namespace neonumeric
 
             if (value != zero)
             {
-                self_type coefficient;
+                xreal coefficient;
                 while (value != zero)
                 {
                     value.div3(base, digitValue, coefficient);
@@ -586,18 +584,18 @@ namespace neonumeric
         {
             iSignBit = aNegative;
         }
-        self_type& float_assign(double aNativeFloat)
+        xreal& float_assign(double aNativeFloat)
         {
             if (std::isnan(aNativeFloat))
             {
-                static const self_type zero = Zero;
+                static const xreal zero = Zero;
                 *this = zero;
                 iSpecial = special::NaN;
                 return *this;
             }
             else if (std::isinf(aNativeFloat))
             {
-                static const self_type zero = Zero;
+                static const xreal zero = Zero;
                 *this = zero;
                 iSpecial = special::Infinity;
                 set_positive(aNativeFloat > 0.0);
@@ -617,14 +615,14 @@ namespace neonumeric
                 m |= architecture_t::HighBit;
             return *this;
         }
-        self_type& integer_assign(const signed_integer_type& aInteger, word_t& aMantissaShift)
+        xreal& integer_assign(const signed_integer_type& aInteger, word_t& aMantissaShift)
         {
             integer_assign(aInteger.to_unsigned(true), aMantissaShift);
             if (aInteger.is_negative())
                 set_negative();
             return *this;
         }
-        self_type& integer_assign(const unsigned_integer_type& aInteger, word_t& aMantissaShift)
+        xreal& integer_assign(const unsigned_integer_type& aInteger, word_t& aMantissaShift)
         {
             mantissa() = aInteger;
             set_positive();
@@ -738,7 +736,7 @@ namespace neonumeric
         }
     private:
         template <bool Add>
-        self_type& add_subtract_algorithm_0(const self_type& aRhs)
+        xreal& add_subtract_algorithm_0(const xreal& aRhs)
         {
             auto args = as_arguments(*this, aRhs);
             auto& lhsMantissa = args.lhs.mantissa();
@@ -811,9 +809,9 @@ namespace neonumeric
 
             return *this;
         }
-        self_type& multiply_algorithm_0(const self_type& aRhs)
+        xreal& multiply_algorithm_0(const xreal& aRhs)
         {
-            static const self_type zero = Zero;
+            static const xreal zero = Zero;
 
             if (is_zero())
                 return *this;
@@ -848,16 +846,16 @@ namespace neonumeric
 
             return *this;
         }
-        self_type& division_algorithm_0(const self_type& aRhs)
+        xreal& division_algorithm_0(const xreal& aRhs)
         {
-            self_type ignore;
+            xreal ignore;
             return division_algorithm_0(aRhs, ignore);
         }
-        self_type& division_algorithm_0(const self_type& aRhs, self_type& aCoefficient)
+        xreal& division_algorithm_0(const xreal& aRhs, xreal& aCoefficient)
         {
-            static self_type const zero = Zero;
-            static self_type const one = One;
-            static self_type const negativeOne = -one;
+            static xreal const zero = Zero;
+            static xreal const one = One;
+            static xreal const negativeOne = -one;
 
             auto const& n = *this;
             auto& result = *this;
@@ -907,9 +905,9 @@ namespace neonumeric
                 d.exponent() = -1;
                 d.set_precision_at_least(coefficientPrecisionBits);
                 x.set_precision_at_least(coefficientPrecisionBits);
-                static auto const c1 = frac<self_type, signed_integer_type>(48, 17);
-                static auto const c2 = frac<self_type, signed_integer_type>(32, 17);
-                self_type one = 1.0;
+                static auto const c1 = frac<xreal, signed_integer_type>(48, 17);
+                static auto const c2 = frac<xreal, signed_integer_type>(32, 17);
+                xreal one = 1.0;
                 one.set_precision_at_least(coefficientPrecisionBits);
                 x = c1 - c2 * d;
                 for (auto s = static_cast<word_t>(std::ceil(std::log2((coefficientPrecisionBits + 1.0) / std::log2(17.0)))); s > Zero; --s)
@@ -923,7 +921,7 @@ namespace neonumeric
             return result;
         }
         template <uint32_t Size2, integer_type Type2, bool Signalling2, std::size_t SmallBufferSize2>
-        static self_type fraction_algorithm_0(const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aLhs, const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aRhs)
+        static xreal fraction_algorithm_0(const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aLhs, const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aRhs)
         {
             if constexpr (std::remove_reference_t<decltype(aLhs)>::IsSigned)
             {
@@ -934,7 +932,7 @@ namespace neonumeric
                 return fraction_algorithm_1(aLhs, aRhs);
         }
         template <uint32_t Size2, integer_type Type2, bool Signalling2, std::size_t SmallBufferSize2>
-        static self_type fraction_algorithm_1(const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aLhs, const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aRhs)
+        static xreal fraction_algorithm_1(const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aLhs, const xinteger<Size2, Type2, Signalling2, SmallBufferSize2>& aRhs)
         {
             static mantissa_t const zero = Zero;
             static mantissa_t const one = One;
@@ -968,7 +966,7 @@ namespace neonumeric
                 ++count;
             }
 
-            self_type result;
+            xreal result;
             word_t mantissaShift;
             result.integer_assign(m | (qint << (count + One)), mantissaShift);
             auto e = qint.magnitude_in_bits();

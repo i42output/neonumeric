@@ -105,7 +105,6 @@ namespace neonumeric
         typedef uint32_t word_index_t;
         typedef word_index_t partial_word_index_t;
     private:
-        typedef xinteger<Size, Type, Signalling, SmallBufferSize> self_type;
         typedef xinteger<Size, integer_type::Signed, Signalling, SmallBufferSize> signed_type;
         typedef xinteger<Size, integer_type::Unsigned, Signalling, SmallBufferSize> unsigned_type;
         typedef storage_traits<word_t, Size, SmallBufferSize> storage_traits_type;
@@ -148,7 +147,7 @@ namespace neonumeric
         {
             assign(aNatives.begin(), aNatives.end());
         }
-        xinteger(const self_type& aOther) :
+        xinteger(const xinteger& aOther) :
             iWords{ aOther.iWords },
             iSignal{ aOther.iSignal },
             iNegative{ aOther.iNegative },
@@ -158,7 +157,7 @@ namespace neonumeric
         {
             words() = aOther.words();
         }
-        xinteger(self_type&& aOther) :
+        xinteger(xinteger&& aOther) :
             iWords{ std::move(aOther.iWords) },
             iSignal{ std::move(aOther.iSignal) },
             iNegative{ aOther.iNegative },
@@ -185,7 +184,7 @@ namespace neonumeric
             assign(aFirst, aLast);
         }
     public:
-        self_type& operator=(const self_type& aOther)
+        xinteger& operator=(const xinteger& aOther)
         {
             if (&aOther == this)
                 return *this;
@@ -197,7 +196,7 @@ namespace neonumeric
             iRepetend = aOther.iRepetend;
             return *this;
         }
-        self_type& operator=(self_type&& aOther)
+        xinteger& operator=(xinteger&& aOther)
         {
             if (&aOther == this)
                 return *this;
@@ -212,7 +211,7 @@ namespace neonumeric
             iRepetend = aOther.iRepetend;
             return *this;
         }
-        self_type& operator=(word_t aNative)
+        xinteger& operator=(word_t aNative)
         {
             if constexpr (!FixedSize)
             {
@@ -249,7 +248,7 @@ namespace neonumeric
         {
             return !is_zero();
         }
-        friend bool operator==(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator==(const xinteger& aLhs, const xinteger& aRhs)
         {
             auto const end = std::max(aLhs.size(), aRhs.size());
             for (word_index_t index = 0; index < end; ++index)
@@ -257,11 +256,11 @@ namespace neonumeric
                     return false;
             return true;
         }
-        friend bool operator!=(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator!=(const xinteger& aLhs, const xinteger& aRhs)
         {
             return !(aLhs == aRhs);
         }
-        friend bool operator<(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator<(const xinteger& aLhs, const xinteger& aRhs)
         {
             if constexpr (IsSigned)
             {
@@ -289,162 +288,162 @@ namespace neonumeric
             }
             return false;
         }
-        friend bool operator<=(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator<=(const xinteger& aLhs, const xinteger& aRhs)
         {
             return !(aRhs < aLhs);
         }
-        friend bool operator>(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator>(const xinteger& aLhs, const xinteger& aRhs)
         {
             return aRhs < aLhs;
         }
-        friend bool operator>=(const self_type& aLhs, const self_type& aRhs)
+        friend bool operator>=(const xinteger& aLhs, const xinteger& aRhs)
         {
             return !(aLhs < aRhs);
         }
     public:
-        friend self_type operator+(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator+(const xinteger& aLhs, const xinteger& aRhs)
         {
             bool overflow;
             return add_algorithm_0(aLhs, aRhs, overflow);
         }
-        friend self_type operator-(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator-(const xinteger& aLhs, const xinteger& aRhs)
         {
             bool overflow;
             return subtract_algorithm_0(aLhs, aRhs, overflow);
         }
-        self_type operator-() const
+        xinteger operator-() const
         {
-            self_type result = *this;
+            xinteger result = *this;
             negate(result);
             return result;
         }
-        friend self_type operator*(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator*(const xinteger& aLhs, const xinteger& aRhs)
         {
             return multiply_algorithm_0(aLhs, aRhs);
         }
-        friend self_type operator/(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator/(const xinteger& aLhs, const xinteger& aRhs)
         {
             return divide_algorithm_0(aLhs, aRhs);
         }
-        friend self_type operator%(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator%(const xinteger& aLhs, const xinteger& aRhs)
         {
             return modulo_algorithm_1(aLhs, aRhs);
         }
-        self_type& operator+=(const self_type& aRhs)
+        xinteger& operator+=(const xinteger& aRhs)
         {
             bool overflow;
             return add_algorithm_0(*this, aRhs, overflow);
         }
-        self_type& operator-=(const self_type& aRhs)
+        xinteger& operator-=(const xinteger& aRhs)
         {
             bool overflow;
             subtract_algorithm_0(*this, aRhs, overflow);
             return *this;
         }
-        self_type& operator*=(const self_type& aRhs)
+        xinteger& operator*=(const xinteger& aRhs)
         {
             *this = multiply_algorithm_0(*this, aRhs);
             return *this;
         }
-        self_type& operator/=(const self_type& aRhs)
+        xinteger& operator/=(const xinteger& aRhs)
         {
             *this = divide_algorithm_0(*this, aRhs);
             return *this;
         }
-        self_type& operator%=(const self_type& aRhs)
+        xinteger& operator%=(const xinteger& aRhs)
         {
             *this = modulo_algorithm_1(*this, aRhs);
             return *this;
         }
-        self_type& operator++()
+        xinteger& operator++()
         {
-            static self_type const one = One;
+            static xinteger const one = One;
             *this += one;
             return *this;
         }
-        self_type operator++(int)
+        xinteger operator++(int)
         {
-            static self_type const one = One;
+            static xinteger const one = One;
             auto previous = *this;
             *this += one;
             return previous;
         }
-        self_type& operator--()
+        xinteger& operator--()
         {
-            static self_type const one = One;
+            static xinteger const one = One;
             *this -= one;
             return *this;
         }
-        self_type operator--(int)
+        xinteger operator--(int)
         {
-            static self_type const one = One;
+            static xinteger const one = One;
             auto previous = *this;
             *this -= one;
             return previous;
         }
-        friend self_type operator|(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator|(const xinteger& aLhs, const xinteger& aRhs)
         {
             return bitwise_or(aLhs, aRhs);
         }
-        friend self_type operator&(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator&(const xinteger& aLhs, const xinteger& aRhs)
         {
             return bitwise_and(aLhs, aRhs);
         }
-        friend self_type operator^(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator^(const xinteger& aLhs, const xinteger& aRhs)
         {
             return bitwise_xor(aLhs, aRhs);
         }
-        friend self_type operator~(const self_type& aLhs)
+        friend xinteger operator~(const xinteger& aLhs)
         {
             return bitwise_not(aLhs);
         }
-        friend self_type operator>>(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator>>(const xinteger& aLhs, const xinteger& aRhs)
         {
             return aLhs >> integer_cast<signed_word_t>(aRhs);
         }
-        friend self_type operator<<(const self_type& aLhs, const self_type& aRhs)
+        friend xinteger operator<<(const xinteger& aLhs, const xinteger& aRhs)
         {
             return aLhs << integer_cast<signed_word_t>(aRhs);
         }
-        friend self_type operator>>(const self_type& aLhs, signed_word_t aRhs)
+        friend xinteger operator>>(const xinteger& aLhs, signed_word_t aRhs)
         {
             return right_shift(aLhs, aRhs);
         }
-        friend self_type operator<<(const self_type& aLhs, signed_word_t aRhs)
+        friend xinteger operator<<(const xinteger& aLhs, signed_word_t aRhs)
         {
             return left_shift(aLhs, aRhs);
         }
-        self_type& operator|=(const self_type& aRhs)
+        xinteger& operator|=(const xinteger& aRhs)
         {
             return bitwise_or(*this, aRhs);
         }
-        self_type& operator&=(const self_type& aRhs)
+        xinteger& operator&=(const xinteger& aRhs)
         {
             return bitwise_and(*this, aRhs);
         }
-        self_type& operator^=(const self_type& aRhs)
+        xinteger& operator^=(const xinteger& aRhs)
         {
             return bitwise_xor(*this, aRhs);
         }
-        self_type& operator>>=(const self_type& aRhs)
+        xinteger& operator>>=(const xinteger& aRhs)
         {
             return *this >>= integer_cast<signed_word_t>(aRhs);
         }
-        self_type& operator<<=(const self_type& aRhs)
+        xinteger& operator<<=(const xinteger& aRhs)
         {
             return *this <<= integer_cast<signed_word_t>(aRhs);
         }
-        self_type& operator>>=(signed_word_t aRhs)
+        xinteger& operator>>=(signed_word_t aRhs)
         {
             return right_shift(*this, aRhs);
         }
-        self_type& operator<<=(signed_word_t aRhs)
+        xinteger& operator<<=(signed_word_t aRhs)
         {
             return left_shift(*this, aRhs);
         }
     public:
         template <typename Exception>
-        const self_type& raise_signal(bool aForceThrow = false) const
+        const xinteger& raise_signal(bool aForceThrow = false) const
         {
             iSignal = Exception{}.what();
             if (Signalling || aForceThrow)
@@ -452,16 +451,16 @@ namespace neonumeric
             return *this;
         }
         template <typename Exception>
-        self_type& raise_signal()
+        xinteger& raise_signal()
         {
-            return const_cast<self_type&>(const_cast<const self_type*>(this)->raise_signal<Exception>());
+            return const_cast<xinteger&>(const_cast<const xinteger*>(this)->raise_signal<Exception>());
         }
         bool is_signalled() const
         {
             return iSignal != std::nullopt;
         }
     public:
-        static self_type from_string(const std::string& aString, uint32_t aBase = 10u)
+        static xinteger from_string(const std::string& aString, uint32_t aBase = 10u)
         {
             std::optional<uint32_t> ignore;
             return from_string<>(aString, aBase, ignore);
@@ -516,7 +515,7 @@ namespace neonumeric
             return result;
         }
     public:
-        friend std::string hex_representation(const self_type& aInteger, bool aSigned = false)
+        friend std::string hex_representation(const xinteger& aInteger, bool aSigned = false)
         {
             auto const signedInteger = (!aSigned || aInteger.is_positive() ? aInteger : -aInteger);
             std::ostringstream oss;
@@ -536,15 +535,15 @@ namespace neonumeric
         {
             if (!is_initialized())
                 return true;
-            static self_type const zero = Zero;
+            static xinteger const zero = Zero;
             return *this == zero;
         }
         template <bool AsFloatingPoint = false>
-        static self_type from_string(const std::string& aString, uint32_t aBase, std::optional<uint32_t>& aFractionalPlaces)
+        static xinteger from_string(const std::string& aString, uint32_t aBase, std::optional<uint32_t>& aFractionalPlaces)
         {
-            static self_type const zero = Zero;
+            static xinteger const zero = Zero;
 
-            self_type result;
+            xinteger result;
 
             unsigned_type const base = aBase;
             unsigned_type unsignedResult;
@@ -850,9 +849,9 @@ namespace neonumeric
                     words().resize(aSize, cword(aSize - 1));
             }
         }
-        self_type with_size(word_index_t aSize) const
+        xinteger with_size(word_index_t aSize) const
         {
-            self_type result = *this;
+            xinteger result = *this;
             result.resize(aSize);
             return result;
         }
@@ -865,7 +864,7 @@ namespace neonumeric
         words_t& words()
         {
             reset_cache();
-            return const_cast<words_t&>(const_cast<const self_type*>(this)->words());
+            return const_cast<words_t&>(const_cast<const xinteger*>(this)->words());
         }
         const word_t& cword(word_index_t aIndex) const
         {
@@ -945,7 +944,7 @@ namespace neonumeric
             w = (w & ~bitToSetOrClear) | (aValue << partialMaskShift);
         }
         template <word_t Bits>
-        self_type& pack()
+        xinteger& pack()
         {
             auto constexpr partialWords = static_cast<word_index_t>(architecture_t::WordBits / Bits);
             auto end = static_cast<word_index_t>(magnitude());
@@ -1021,14 +1020,14 @@ namespace neonumeric
         }
         neonumeric::repetend& repetend()
         {
-            return const_cast<neonumeric::repetend&>(const_cast<const self_type*>(this)->repetend());
+            return const_cast<neonumeric::repetend&>(const_cast<const xinteger*>(this)->repetend());
         }
-        self_type unpack(word_t aMagntitudeInBits) const
+        xinteger unpack(word_t aMagntitudeInBits) const
         {
             if (!has_repetend())
                 throw not_packed();
 
-            static const self_type zero = Zero;
+            static const xinteger zero = Zero;
             if (aMagntitudeInBits == Zero)
                 return zero;
 
@@ -1042,7 +1041,7 @@ namespace neonumeric
             word_index_t const cycleStartWordIndex = static_cast<word_index_t>(repetend().cycleStart / architecture_t::WordBits);
             word_index_t const cycleEndWordIndex = static_cast<word_index_t>(repetend().cycleEnd / architecture_t::WordBits);
 
-            self_type result;
+            xinteger result;
             for (auto resultWordIndex = resultWordCount; resultWordIndex--> cycleEndWordIndex; )
                 result.word(resultWordIndex) = word(sourceWordIndex);
 
@@ -1065,7 +1064,7 @@ namespace neonumeric
         mutable std::optional<word_t> iMagnitude;
         mutable std::optional<word_t> iMagnitudeInBits;
         mutable std::optional<neonumeric::repetend> iRepetend;
-        self_type& iUnpacker = *this;
+        xinteger& iUnpacker = *this;
         mutable std::optional<word_t> iUnpacked;
     };
 
