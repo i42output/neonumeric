@@ -1,6 +1,6 @@
 // integer.hpp
 /*
- *  Copyright (c) 2019 Leigh Johnston.
+ *  Copyright (c) 2025 Leigh Johnston.
  *
  *  All rights reserved.
  *
@@ -97,6 +97,8 @@ namespace neonumeric
         friend struct xinteger_traits;
         template <typename XInteger>
         friend struct xinteger_detail;
+    public:
+        using abstract_type = xinteger; ///< @todo plugin ABI compatability
     public:
         typedef xreal<Size, Size, Size, Signalling, SmallBufferSize> real_type;
     public:

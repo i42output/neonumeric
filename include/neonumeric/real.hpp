@@ -56,6 +56,8 @@ namespace neonumeric
         template <typename RealType, typename IntegerType>
         friend RealType frac(const IntegerType&, const IntegerType&);
     public:
+        using abstract_type = xreal; ///< @todo plugin ABI compatability
+    public:
         typedef xinteger<Size, integer_type::Signed, Signalling, SmallBufferSize> signed_integer_type;
         typedef xinteger<Size, integer_type::Unsigned, Signalling, SmallBufferSize> unsigned_integer_type;
     public:
