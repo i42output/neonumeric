@@ -98,8 +98,6 @@ namespace neonumeric
         template <typename XInteger>
         friend struct xinteger_detail;
     public:
-        using abstract_type = xinteger; ///< @todo plugin ABI compatability
-    public:
         typedef xreal<Size, Size, Size, Signalling, SmallBufferSize> real_type;
     public:
         typedef architecture_t::word_t word_t;
