@@ -459,7 +459,7 @@ namespace neonumeric
         }
         static xreal from_string(const std::string& aString, uint32_t aBase = 10u)
         {
-            return from_string(std::string_view{ aString });
+            return from_string(std::string_view{ aString }, aBase);
         }
         static xreal from_string(const std::string_view& aString, uint32_t aBase = 10u)
         {
