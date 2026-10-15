@@ -194,44 +194,48 @@ namespace neonumeric
             }
             if (is_zero())
                 return 0.0;
-            // todo: raise exception and/or nan on too big for double
+            // correctly rounded (to nearest, ties to even) including subnormal results and overflow to infinity
             auto const& arg = as_argument(*this).arg;
-            uint64_t bits = {};
-            if (arg.is_negative())
-                bits |= 1ull;
-            bits <<= 1; // sign
-            bits <<= 11; // exponent
-            auto const start = arg.mantissa().magnitude() * architecture_t::WordBits - Two;
-            auto nextBit = start;
-            static unsigned_integer_type const one = One;
-            auto test = one << nextBit;
-            while (nextBit > start - 52)
+            auto const& m = arg.mantissa();
+            auto const bits = m.magnitude_in_bits();
+            if (bits == Zero)
+                return 0.0;
+            auto const leading = static_cast<std::int64_t>(bits) - 1;
+            // binary exponent of the leading bit
+            std::int64_t const e = static_cast<std::int64_t>(exponent()) - 
+                (static_cast<std::int64_t>(m.magnitude() * architecture_t::WordBits) - 1 - leading);
+            // the leading 64 bits and whether any bits below them are set
+            uint64_t top = 0u;
+            for (std::int64_t i = 0; i < 64; ++i)
             {
-                if (nextBit != start)
-                    bits <<= 1;
-                if (arg.mantissa() & test)
-                    bits |= 1;
-                --nextBit;
-                test >>= one;
+                top <<= 1;
+                if (leading - i >= 0 && m.bit(static_cast<word_t>(leading - i)) != Zero)
+                    top |= 1u;
             }
-            // round to nearest, ties to even, using the first discarded bit and any bits below it
-            auto exponentValue = exponent();
-            bool const roundBit = static_cast<bool>(arg.mantissa() & test);
-            bool const stickyBits = roundBit && test != unsigned_integer_type{} && static_cast<bool>(arg.mantissa() & (test - one));
-            if (roundBit && (stickyBits || (bits & 1ull)))
+            bool sticky = false;
+            for (std::int64_t position = leading - 64; position >= 0 && !sticky; --position)
+                sticky = (m.bit(static_cast<word_t>(position)) != Zero);
+            double result = 0.0;
+            if (e > 1023)
+                result = std::numeric_limits<double>::infinity();
+            else
             {
-                constexpr uint64_t mantissaMask = (1ull << 52) - 1ull;
-                if ((bits & mantissaMask) == mantissaMask)
+                // significant bits available: 53, fewer for subnormal results
+                std::int64_t const precision = (e >= -1022 ? 53 : 53 - (-1022 - e));
+                if (precision == 0)
+                    result = (top != (1ull << 63) || sticky) ? std::ldexp(1.0, -1074) : 0.0;
+                else if (precision > 0)
                 {
-                    bits &= ~mantissaMask; // mantissa overflows into the exponent
-                    ++exponentValue;
+                    auto const shift = static_cast<int>(64 - precision);
+                    uint64_t keep = top >> shift;
+                    uint64_t const rest = top & ((1ull << shift) - 1u);
+                    uint64_t const half = 1ull << (shift - 1);
+                    if (rest > half || (rest == half && (sticky || (keep & 1u))))
+                        ++keep;
+                    result = std::ldexp(static_cast<double>(keep), static_cast<int>(e - (precision - 1)));
                 }
-                else
-                    ++bits;
             }
-            double result = std::pow(2.0, exponentValue);
-            *reinterpret_cast<uint64_t*>(&result) |= bits;
-            return result;
+            return arg.is_negative() ? -result : result;
         }
         operator signed_integer_type() const
         {
@@ -478,18 +482,80 @@ namespace neonumeric
         }
         static xreal from_string(const std::string_view& aString, uint32_t aBase = 10u)
         {
-            std::optional<uint32_t> fractionalPlaces;
-            auto signedResult = signed_integer_type::template from_string<true>(aString, aBase, fractionalPlaces);;
-            xreal result;
-            result = signedResult.to_unsigned(true);
-            result.set_precision(static_cast<precision_t>(result.mantissa().magnitude() * architecture_t::WordBits));
-            if (signedResult.is_negative())
-                result.set_negative();
-            if (fractionalPlaces)
+            // optional decimal exponent (e.g. "1.5e-5")
+            std::string_view mantissa = aString;
+            std::int64_t exponent = 0;
+            if (aBase == 10u)
             {
-                xreal const d{ pow(integer_t{ aBase }, *fractionalPlaces) };
-                result /= d;
+                auto const e = aString.find_first_of("eE");
+                if (e != std::string_view::npos)
+                {
+                    mantissa = aString.substr(0u, e);
+                    auto digits = aString.substr(e + 1u);
+                    bool const negative = !digits.empty() && digits[0] == '-';
+                    if (!digits.empty() && (digits[0] == '+' || digits[0] == '-'))
+                        digits.remove_prefix(1u);
+                    if (digits.empty())
+                        throw invalid_string{};
+                    for (auto digit : digits)
+                    {
+                        if (digit < '0' || digit > '9' || exponent > 1000000)
+                            throw invalid_string{};
+                        exponent = exponent * 10 + (digit - '0');
+                    }
+                    if (negative)
+                        exponent = -exponent;
+                }
             }
+            std::optional<uint32_t> fractionalPlaces;
+            auto signedResult = signed_integer_type::template from_string<true>(mantissa, aBase, fractionalPlaces);;
+            bool const negative = signedResult.is_negative();
+            integer_t const n = signedResult.to_unsigned(true).to_signed(true);
+            // value = n * base^scale
+            std::int64_t const scale = exponent - static_cast<std::int64_t>(fractionalPlaces.value_or(0u));
+            xreal result;
+            if (n.is_zero() || scale == 0)
+                result = n;
+            else
+            {
+                if (aBase == 10u)
+                {
+                    // (beyond this range a value is not representable as a double)
+                    std::int64_t digits = 0;
+                    for (auto digit : mantissa)
+                        if (digit >= '0' && digit <= '9' && (digits != 0 || digit != '0'))
+                            ++digits;
+                    std::int64_t const leading = digits - 1 + scale;
+                    if (leading > 1000)
+                    {
+                        result = xreal{ std::numeric_limits<double>::infinity() };
+                        if (negative)
+                            result.set_negative();
+                        return result;
+                    }
+                    if (leading < -1000)
+                        return xreal{ 0.0 };
+                }
+                if (scale > 0)
+                    result = n * pow(integer_t{ aBase }, static_cast<uint32_t>(scale));
+                else
+                {
+                    // exact quotient to at least 128 significant bits; any remainder sets the lowest bit so that 
+                    // conversions round correctly
+                    auto const d = pow(integer_t{ aBase }, static_cast<uint32_t>(-scale));
+                    std::int64_t const shift = std::max<std::int64_t>(0, 128 + 
+                        static_cast<std::int64_t>(d.magnitude_in_bits()) - static_cast<std::int64_t>(n.magnitude_in_bits()));
+                    auto const numerator = n << static_cast<signed_word_t>(shift);
+                    auto quotient = numerator / d;
+                    if (!(numerator % d).is_zero())
+                        quotient = quotient | integer_t{ One };
+                    result = quotient;
+                    result.exponent() -= static_cast<exponent_t>(shift);
+                }
+            }
+            result.set_precision(static_cast<precision_t>(result.mantissa().magnitude() * architecture_t::WordBits));
+            if (negative)
+                result.set_negative();
             return result;
         }
         std::string to_string(uint32_t aBase = 10u, precision_t aPrecision = std::numeric_limits<double>::digits10 + 1, uint32_t aGrouping = 0u) const
