@@ -214,7 +214,22 @@ namespace neonumeric
                 --nextBit;
                 test >>= one;
             }
-            double result = std::pow(2.0, exponent());
+            // round to nearest, ties to even, using the first discarded bit and any bits below it
+            auto exponentValue = exponent();
+            bool const roundBit = static_cast<bool>(arg.mantissa() & test);
+            bool const stickyBits = roundBit && test != unsigned_integer_type{} && static_cast<bool>(arg.mantissa() & (test - one));
+            if (roundBit && (stickyBits || (bits & 1ull)))
+            {
+                constexpr uint64_t mantissaMask = (1ull << 52) - 1ull;
+                if ((bits & mantissaMask) == mantissaMask)
+                {
+                    bits &= ~mantissaMask; // mantissa overflows into the exponent
+                    ++exponentValue;
+                }
+                else
+                    ++bits;
+            }
+            double result = std::pow(2.0, exponentValue);
             *reinterpret_cast<uint64_t*>(&result) |= bits;
             return result;
         }
