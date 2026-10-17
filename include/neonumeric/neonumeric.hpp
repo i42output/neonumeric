@@ -124,7 +124,7 @@ namespace neonumeric
 
     // Check GCC
 #if __GNUC__
-#if __x86_64__ || __ppc64__
+#if __x86_64__ || __ppc64__ || __aarch64__
     typedef architecture_64 architecture_t;
 #else
     typedef architecture_32 architecture_t;

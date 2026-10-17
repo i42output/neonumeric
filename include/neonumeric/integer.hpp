@@ -38,6 +38,11 @@
 #include <vector>
 #include <array>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <limits>
+#include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <iostream>
 #include <iomanip>
@@ -124,7 +129,7 @@ namespace neonumeric
         static constexpr word_t MaxLeftShift = architecture_64::LowerQuarterWordMask << (architecture_64::QuarterWordBits >> One);
         static constexpr word_t MultiplyAlgorithm1Threshold = 256u; // todo (profile/benchmark to determine optimum value)
         static constexpr word_t MultiplyAlgorithm2Threshold = 512u; // todo (profile/benchmark to determine optimum value)
-        static constexpr word_t DivideAlgorithm1Threshold = 9u; // todo (profile/benchmark to determine optimum value)
+        static constexpr word_t DivideAlgorithm1Threshold = 0u; // (algorithm 2 (Knuth D) is faster than algorithm 1 (one bit at a time) at all sizes)
     public:
         typedef words_t representation_t;
     public:
@@ -174,7 +179,7 @@ namespace neonumeric
             else
                 iWords = aRepresentation;
             if constexpr (IsSigned)
-                if ((cword(0u) & architecture_t::SignBit) == architecture_t::SignBit)
+                if (size() != 0u && (cword(size() - 1u) & architecture_t::SignBit) == architecture_t::SignBit)
                     set_negative();
         }
         template <typename InputIter>
@@ -229,8 +234,7 @@ namespace neonumeric
             else
                 words() = representation_t{ aNative };
             if constexpr (IsSigned)
-                if ((aNative & architecture_t::SignBit) == architecture_t::SignBit)
-                    set_negative(true);
+                set_negative((aNative & architecture_t::SignBit) == architecture_t::SignBit);
             iSignal = std::nullopt;
             iMagnitude = 1u;
             iMagnitudeInBits = std::nullopt;
@@ -479,25 +483,50 @@ namespace neonumeric
         }
         std::string to_string(uint32_t aBase = 10u, uint32_t aGrouping = 0u) const
         {
-            static unsigned_type const zero = Zero;
-            
-            real_type const base = aBase;
-            real_type digitValue;
-
             if (is_signalled())
                 return "sNaN";
 
-            real_type value{ to_unsigned(true) };
-            real_type coefficient;
-            std::string digits;
-            while(value != zero)
+            // the magnitude as half word digits (least significant first): each pass divides it by the largest power of the base
+            // that fits in a half word, giving the next (least significant) group of output digits
+            word_t constexpr digitBits = architecture_t::HalfWordBits;
+            word_t constexpr mask = architecture_t::LowerHalfWordMask;
+            unsigned_type const value = to_unsigned(true);
+            std::vector<word_t> number;
+            for (auto const& w : value.words())
             {
-                value.div3(base, digitValue, coefficient);
-                uint8_t digit = integer_cast<uint8_t>(static_cast<unsigned_type>(digitValue));
-                digit += '0';
-                if (digit > '9')
-                    digit += ('A' - ('0' + 10u));
-                digits += digit;
+                number.push_back(architecture_t::low_half(w));
+                number.push_back(architecture_t::high_half(w));
+            }
+            while (!number.empty() && number.back() == Zero)
+                number.pop_back();
+            word_t chunkBase = aBase;
+            uint32_t chunkDigits = 1u;
+            while (chunkBase * aBase <= mask)
+            {
+                chunkBase *= aBase;
+                ++chunkDigits;
+            }
+            std::string digits;
+            while (!number.empty())
+            {
+                word_t remainder = Zero;
+                for (std::size_t i = number.size(); i-- > 0u;)
+                {
+                    word_t const t = (remainder << digitBits) | number[i];
+                    number[i] = t / chunkBase;
+                    remainder = t - number[i] * chunkBase;
+                }
+                while (!number.empty() && number.back() == Zero)
+                    number.pop_back();
+                for (uint32_t d = 0u; d < chunkDigits && (remainder != Zero || !number.empty()); ++d)
+                {
+                    uint8_t digit = static_cast<uint8_t>(remainder % aBase);
+                    remainder /= aBase;
+                    digit += '0';
+                    if (digit > '9')
+                        digit += ('A' - ('0' + 10u));
+                    digits += digit;
+                }
             }
             if (digits.empty())
                 digits = "0";
@@ -559,8 +588,7 @@ namespace neonumeric
 
             unsigned_type const base = aBase;
             unsigned_type unsignedResult;
-            unsigned_type multiplier = 1u;
-            unsigned_type digitValue;
+            std::vector<uint8_t> digitValues; // (least significant first)
             bool negative = false;
             bool allowWhitespace = true;
             bool gotDigit = false;
@@ -610,9 +638,48 @@ namespace neonumeric
                     digit -= ('a' - 'A');
                 if (digit >= aBase)
                     return (result = zero).template raise_signal<invalid_string>();
-                digitValue = digit * multiplier;
-                unsignedResult += digitValue;
-                multiplier *= base;
+                digitValues.push_back(digit);
+            }
+            {
+                // the value as half word digits (least significant first): groups of input digits (the largest power of the base 
+                // that fits in a half word), most significant first, are multiplied in
+                word_t constexpr digitBits = architecture_t::HalfWordBits;
+                word_t constexpr mask = architecture_t::LowerHalfWordMask;
+                word_t chunkBase = aBase;
+                std::size_t chunkDigits = 1u;
+                while (chunkBase * aBase <= mask)
+                {
+                    chunkBase *= aBase;
+                    ++chunkDigits;
+                }
+                std::vector<word_t> number;
+                std::size_t next = digitValues.size();
+                while (next > 0u)
+                {
+                    auto const count = (next - 1u) % chunkDigits + 1u;
+                    word_t chunk = Zero;
+                    word_t multiplier = One;
+                    for (std::size_t d = 0u; d < count; ++d)
+                    {
+                        chunk = chunk * aBase + digitValues[next - 1u - d];
+                        multiplier *= aBase;
+                    }
+                    next -= count;
+                    word_t carry = chunk;
+                    for (auto& digit : number)
+                    {
+                        word_t const t = digit * multiplier + carry;
+                        digit = t & mask;
+                        carry = t >> digitBits;
+                    }
+                    if (carry != Zero)
+                        number.push_back(carry);
+                }
+                std::vector<word_t> numberWords((number.size() + 1u) / 2u, Zero);
+                for (std::size_t i = 0u; i < number.size(); ++i)
+                    numberWords[i / 2u] |= number[i] << ((i % 2u) * digitBits);
+                if (!numberWords.empty())
+                    unsignedResult.assign(numberWords.begin(), numberWords.end());
             }
             if (gotPoint)
             {

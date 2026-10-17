@@ -38,6 +38,10 @@
 #include <vector>
 #include <array>
 #include <optional>
+#include <string>
+#include <limits>
+#include <algorithm>
+#include <cmath>
 #include <sstream>
 #include <iostream>
 #include <iomanip>

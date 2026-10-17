@@ -56,6 +56,9 @@ namespace test
         if constexpr (number::IsInteger)
         {
             f["<<"] = [](const number& x, const number& y) -> number { return x << y; };
+            f["&"] = [](const number& x, const number& y) -> number { return x & y; };
+            f["|"] = [](const number& x, const number& y) -> number { return x | y; };
+            f["^"] = [](const number& x, const number& y) -> number { return x ^ y; };
             f[">>"] = [](const number& x, const number& y) -> number { return x >> y; };
             f["frac"] = [](const number& x, const number& y) -> number { return number{ neonumeric::frac<typename number::real_type>(x, y) }; };
         }
@@ -367,6 +370,41 @@ namespace test
             "B7219B04469700D9D03E2034BDA2490E0015B5EF17DFAF0928856D6ADF69B6B7DB00"
             "A05F62251C99EDEF1DBBC229E3F2BDA49E0B8194534683D5EE7B666E4DC0F39FAE74"
             "4DB676445F271870B334100000000");
+
+        // bitwise operations on negative integers (two's complement, the sign extending beyond the words)
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-7 & 12", "8");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-7 | 12", "-3");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-7 ^ 12", "-11");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-340282366920938463463374607431768211457 & -18446744073709551617", "-340282366920938463481821351505477763073");
+        test_equality(failedTests, passedTests, ~signed_number{ -8 }, signed_number{ 7 });
+        test_equality(failedTests, passedTests, ~signed_number{ 7 }, signed_number{ -8 });
+        test_equality(failedTests, passedTests, ~signed_number::from_string(std::string{ "340282366920938463463374607431768211456" }), signed_number::from_string(std::string{ "-340282366920938463463374607431768211457" }));
+        // shifts of negative integers
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-7816196644092205130 << 194", "-196252246075018924840508833427457744876120904337633066861843616014440249425920");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-7816196644092205130 >> 194", "-1");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-7 >> 1", "-4");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "4611686018427387904 << 1", "9223372036854775808");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "9223372036854775808 + 1", "9223372036854775809");
+        // single word subtraction that overflows a word
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-6178902289585186614 - 7332634792918634000", "-13511537082503820614");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "9223372036854775807 - -32", "9223372036854775839");
+        // unsigned subtraction with the most significant bits set
+        output_test<unsigned_number>(failedTests, passedTests, 10u, 10u, "340282366920938463463374607431768211454 - 170141183460469231731687303715884105728", "170141183460469231731687303715884105726");
+        // multiword division (60!^2 / 60!)
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, 
+            "69238826530408296215524170450262985254393227649879656331132480623524049891766697382785887060188063384494795553340756316369516704730972160000000000000000000000000000 / 8320987112741390144276341183223364380754172606361245952449277696409600000000000000",
+            "8320987112741390144276341183223364380754172606361245952449277696409600000000000000");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, 
+            "69238826530408296215524170450262985254393227649879656331132480623524049891766697382785887060188063384494795553340756316369516704730972160000000000000000000000000000 % 8320987112741390144276341183223364380754172606361245952449277696409600000000000000",
+            "0");
+        output_test<signed_number>(failedTests, passedTests, 10u, 10u, "-340282366920938463463374607431768211454 % -170141183460469231731687303715884105728", "-170141183460469231731687303715884105726");
+        // a one word operand and a large operand (Karatsuba must not split the one word operand); parsing a long string
+        {
+            std::string const nines(6000u, '9');
+            std::string const product = "2" + std::string(5999u, '9') + "7";
+            output_test<signed_number>(failedTests, passedTests, 10u, 10u, "3 * " + nines, product);
+            output_test<signed_number>(failedTests, passedTests, 10u, 10u, product + " / 3", nines);
+        }
 
         if (failedTests == 0u)
             std::cout << "All " << passedTests << " tests pass! \\o/" << std::endl;

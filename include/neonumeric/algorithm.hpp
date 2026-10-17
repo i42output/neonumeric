@@ -35,7 +35,10 @@
 
 #pragma once
 
+#include <vector>
+#include <algorithm>
 #include <neonumeric/neonumeric.hpp>
+#include <neonumeric/exceptions.hpp>
 
 namespace neonumeric
 {
@@ -329,11 +332,19 @@ namespace neonumeric
                 xinteger_detail<XInteger>::word(result, 0u) = integer_cast<architecture_t::word_t>(lhs) - integer_cast<architecture_t::word_t>(rhs);
             else
             {
-                typedef typename xinteger_traits<XInteger>::signed_type signed_type;
-                thread_local signed_type signedLhs;
-                thread_local signed_type signedRhs;
-                bool const sameMag = (xinteger_detail<XInteger>::magnitude(lhs) == xinteger_detail<XInteger>::magnitude(rhs));
-                xinteger_detail<signed_type>::to_unsigned(result, subtract_algorithm_0(xinteger_detail<XInteger>::to_signed(signedLhs, lhs, true, !sameMag), xinteger_detail<XInteger>::to_signed(signedRhs, rhs, true, !sameMag), aOverflow), false);
+                // (modulo 2 to the power of the bits in the larger operand's words)
+                auto const end = std::max(xinteger_detail<XInteger>::magnitude(lhs), xinteger_detail<XInteger>::magnitude(rhs));
+                architecture_t::word_t borrow = xinteger_t<XInteger>::Zero;
+                for (typename xinteger_t<XInteger>::word_index_t index = 0u; index < end; ++index)
+                {
+                    auto const l = xinteger_detail<XInteger>::cword(lhs, index);
+                    auto const r = xinteger_detail<XInteger>::cword(rhs, index);
+                    auto const difference = l - r - borrow;
+                    borrow = (l < r || (l == r && borrow != xinteger_t<XInteger>::Zero)) ? xinteger_t<XInteger>::One : xinteger_t<XInteger>::Zero;
+                    xinteger_detail<XInteger>::word(result, index) = difference;
+                }
+                aOverflow = (borrow != xinteger_t<XInteger>::Zero);
+                xinteger_detail<XInteger>::magnitude(result);
             }
             return result;
         }
@@ -342,9 +353,16 @@ namespace neonumeric
         {
             if constexpr (xinteger_t<XInteger>::IsSigned)
             {
-                result = integer_cast<architecture_t::word_t>(lhs) - integer_cast<architecture_t::word_t>(rhs);
-                xinteger_detail<XInteger>::set_negative(result, xinteger_detail<XInteger>::is_sign_bit_set(result));
-                return result;
+                auto const l = integer_cast<architecture_t::word_t>(lhs);
+                auto const r = integer_cast<architecture_t::word_t>(rhs);
+                auto const difference = l - r;
+                // (no overflow unless the operands' signs differ and the difference's sign is not the left operand's)
+                if ((((l ^ r) & (l ^ difference)) & architecture_t::SignBit) == architecture_t::Zero)
+                {
+                    result = difference;
+                    xinteger_detail<XInteger>::set_negative(result, xinteger_detail<XInteger>::is_sign_bit_set(result));
+                    return result;
+                }
             }
         }
 
@@ -595,11 +613,12 @@ namespace neonumeric
         auto const lhsMag = xinteger_detail<XInteger>::magnitude(aLhs);
         auto const rhsMag = xinteger_detail<XInteger>::magnitude(aRhs);
 
-        if (lhsMag + rhsMag <= xinteger_traits<XInteger>::MultiplyAlgorithm1Threshold)
-            return multiply_algorithm_naive_long_multiplication(aLhs, aRhs);
-
         auto const m = std::min(lhsMag, rhsMag);
         auto const m2 = m / 2;
+
+        // (a small operand, or one much smaller than the other: splitting would not reduce the work (or, with m2 == 0, recurse forever))
+        if (lhsMag + rhsMag <= xinteger_traits<XInteger>::MultiplyAlgorithm1Threshold || m <= xinteger_traits<XInteger>::MultiplyAlgorithm1Threshold / 8u)
+            return multiply_algorithm_naive_long_multiplication(aLhs, aRhs);
 
         XInteger low1{ xinteger_detail<XInteger>::words(aLhs).begin(), xinteger_detail<XInteger>::words(aLhs).begin() + m2 };
         XInteger high1{ xinteger_detail<XInteger>::words(aLhs).begin() + m2, xinteger_detail<XInteger>::words(aLhs).end() };
@@ -762,13 +781,120 @@ namespace neonumeric
     template <typename XInteger>
     inline XInteger divide_algorithm_2(const XInteger& aLhs, const XInteger& aRhs, XInteger& aRemainder)
     {
-        thread_local bool alreadyInHere = false;
-        if (alreadyInHere)
-            return divide_algorithm_1(aLhs, aRhs, aRemainder);
-        scoped_flag sf{ alreadyInHere };
-        auto q = typename xinteger_t<XInteger>::real_type{ aLhs } / typename xinteger_t<XInteger>::real_type{ aRhs };
-        aRemainder = aLhs - (aRhs * q);
-        return q;
+        // Knuth, The Art of Computer Programming, Volume 2, 4.3.1, Algorithm D: the digits are half words (so that the product 
+        // of two digits fits in a word); the operands are non-negative
+        typedef architecture_t::word_t word_t;
+        typedef architecture_t::signed_word_t signed_word_t;
+        word_t constexpr digitBits = architecture_t::HalfWordBits;
+        word_t constexpr base = architecture_t::One << digitBits;
+        word_t constexpr mask = architecture_t::LowerHalfWordMask;
+
+        auto const to_digits = [](const XInteger& aValue)
+        {
+            std::vector<word_t> result;
+            auto const n = xinteger_detail<XInteger>::magnitude(aValue);
+            for (typename xinteger_t<XInteger>::word_index_t i = 0u; i < n; ++i)
+            {
+                auto const w = xinteger_detail<XInteger>::cword(aValue, i);
+                result.push_back(architecture_t::low_half(w));
+                result.push_back(architecture_t::high_half(w));
+            }
+            while (result.size() > 1u && result.back() == architecture_t::Zero)
+                result.pop_back();
+            return result;
+        };
+        auto const from_digits = [](std::vector<word_t> const& aDigits, std::size_t aCount)
+        {
+            std::vector<word_t> words((aCount + 1u) / 2u, architecture_t::Zero);
+            for (std::size_t i = 0u; i < aCount; ++i)
+                words[i / 2u] |= aDigits[i] << ((i % 2u) * digitBits);
+            if (words.empty() || (words.back() & architecture_t::SignBit) == architecture_t::SignBit)
+                words.push_back(architecture_t::Zero);
+            return XInteger{ words.begin(), words.end() };
+        };
+
+        auto const u = to_digits(aLhs);
+        auto const v = to_digits(aRhs);
+        auto const n = v.size();
+        if (n == 1u && v[0] == architecture_t::Zero)
+            return divide_algorithm_1(aLhs, aRhs, aRemainder); // (signals divide by zero)
+        if (u.size() < n)
+        {
+            aRemainder = aLhs;
+            return XInteger{};
+        }
+        auto const m = u.size() - n;
+        std::vector<word_t> q(m + 1u, architecture_t::Zero);
+        if (n == 1u)
+        {
+            word_t k = architecture_t::Zero;
+            for (std::size_t j = u.size(); j-- > 0u;)
+            {
+                auto const t = k * base + u[j];
+                q[j] = t / v[0];
+                k = t - q[j] * v[0];
+            }
+            aRemainder = from_digits(std::vector<word_t>{ k }, 1u);
+            return from_digits(q, q.size());
+        }
+        // normalize (the divisor's most significant digit has its high bit set)
+        word_t s = architecture_t::Zero;
+        while (((v[n - 1u] << s) & (architecture_t::One << (digitBits - architecture_t::One))) == architecture_t::Zero)
+            ++s;
+        std::vector<word_t> vn(n), un(u.size() + 1u);
+        for (std::size_t i = n - 1u; i > 0u; --i)
+            vn[i] = ((v[i] << s) | (v[i - 1u] >> (digitBits - s))) & mask;
+        vn[0] = (v[0] << s) & mask;
+        un[u.size()] = u[u.size() - 1u] >> (digitBits - s);
+        for (std::size_t i = u.size() - 1u; i > 0u; --i)
+            un[i] = ((u[i] << s) | (u[i - 1u] >> (digitBits - s))) & mask;
+        un[0] = (u[0] << s) & mask;
+        for (std::size_t j = m + 1u; j-- > 0u;)
+        {
+            // estimate the quotient digit (at most one too large after the corrections)
+            word_t const top = un[j + n] * base + un[j + n - 1u];
+            word_t qhat = top / vn[n - 1u];
+            word_t rhat = top - qhat * vn[n - 1u];
+            while (qhat >= base || qhat * vn[n - 2u] > base * rhat + un[j + n - 2u])
+            {
+                --qhat;
+                rhat += vn[n - 1u];
+                if (rhat >= base)
+                    break;
+            }
+            // multiply and subtract
+            signed_word_t k = 0;
+            signed_word_t t = 0;
+            for (std::size_t i = 0u; i < n; ++i)
+            {
+                word_t const p = qhat * vn[i];
+                t = static_cast<signed_word_t>(un[i + j]) - k - static_cast<signed_word_t>(p & mask);
+                un[i + j] = static_cast<word_t>(t) & mask;
+                k = static_cast<signed_word_t>(p >> digitBits) - (t >> digitBits);
+            }
+            t = static_cast<signed_word_t>(un[j + n]) - k;
+            un[j + n] = static_cast<word_t>(t) & mask;
+            q[j] = qhat;
+            if (t < 0)
+            {
+                // (the estimate was one too large: add back)
+                --q[j];
+                word_t c = architecture_t::Zero;
+                for (std::size_t i = 0u; i < n; ++i)
+                {
+                    word_t const sum = un[i + j] + vn[i] + c;
+                    un[i + j] = sum & mask;
+                    c = sum >> digitBits;
+                }
+                un[j + n] = (un[j + n] + c) & mask;
+            }
+        }
+        // unnormalize the remainder
+        std::vector<word_t> r(n);
+        for (std::size_t i = 0u; i < n; ++i)
+            r[i] = ((un[i] >> s) | (s != architecture_t::Zero ? (un[i + 1u] << (digitBits - s)) : architecture_t::Zero)) & mask;
+        aRemainder = from_digits(r, n);
+        return from_digits(q, q.size());
     }
 
     template <typename XInteger>
@@ -955,9 +1081,13 @@ namespace neonumeric
         auto& lhs = args.lhs;
         auto const& rhs = args.rhs;
         auto& result = lhs;
+        // (the words are two's complement: beyond its words an integer is extended with its sign)
+        bool const negative = xinteger_detail<XInteger>::is_negative(lhs) || xinteger_detail<XInteger>::is_negative(rhs);
         auto const end = std::max(xinteger_detail<XInteger>::size(lhs), xinteger_detail<XInteger>::size(rhs));
         for (typename xinteger_t<XInteger>::word_index_t index = 0; index < end; ++index)
             xinteger_detail<XInteger>::word(lhs, index) |= xinteger_detail<XInteger>::cword(rhs, index);
+        xinteger_detail<XInteger>::set_negative(result, negative);
+        xinteger_detail<XInteger>::magnitude(result);
         return result;
     }
 
@@ -968,9 +1098,13 @@ namespace neonumeric
         auto& lhs = args.lhs;
         auto const& rhs = args.rhs;
         auto& result = lhs;
+        // (the words are two's complement: beyond its words an integer is extended with its sign)
+        bool const negative = xinteger_detail<XInteger>::is_negative(lhs) && xinteger_detail<XInteger>::is_negative(rhs);
         auto const end = std::max(xinteger_detail<XInteger>::size(lhs), xinteger_detail<XInteger>::size(rhs));
         for (typename xinteger_t<XInteger>::word_index_t index = 0; index < end; ++index)
             xinteger_detail<XInteger>::word(lhs, index) &= xinteger_detail<XInteger>::cword(rhs, index);
+        xinteger_detail<XInteger>::set_negative(result, negative);
+        xinteger_detail<XInteger>::magnitude(result);
         return result;
     }
 
@@ -981,9 +1115,13 @@ namespace neonumeric
         auto& lhs = args.lhs;
         auto const& rhs = args.rhs;
         auto& result = lhs;
+        // (the words are two's complement: beyond its words an integer is extended with its sign)
+        bool const negative = xinteger_detail<XInteger>::is_negative(lhs) != xinteger_detail<XInteger>::is_negative(rhs);
         auto const end = std::max(xinteger_detail<XInteger>::size(lhs), xinteger_detail<XInteger>::size(rhs));
         for (typename xinteger_t<XInteger>::word_index_t index = 0; index < end; ++index)
             xinteger_detail<XInteger>::word(lhs, index) ^= xinteger_detail<XInteger>::cword(rhs, index);
+        xinteger_detail<XInteger>::set_negative(result, negative);
+        xinteger_detail<XInteger>::magnitude(result);
         return result;
     }
 
@@ -993,9 +1131,11 @@ namespace neonumeric
         auto arg = as_argument<XInteger>(aLhs);
         auto& result = arg.arg;
 
+        bool const negative = !xinteger_detail<XInteger>::is_negative(result);
         auto const end = xinteger_detail<XInteger>::size(result);
         for (typename xinteger_t<XInteger>::word_index_t index = 0; index < end; ++index)
-            xinteger_detail<XInteger>::word(result, index) = xinteger_detail<XInteger>::cword(~result, index);
+            xinteger_detail<XInteger>::word(result, index) = ~xinteger_detail<XInteger>::cword(result, index);
+        xinteger_detail<XInteger>::set_negative(result, negative);
 
         return result;
     }
@@ -1048,7 +1188,13 @@ namespace neonumeric
             return result;
             
         if constexpr (!xinteger_traits<XInteger>::FixedSize)
+        {
+            bool const negative = xinteger_detail<XInteger>::is_negative(result);
             xinteger_detail<XInteger>::words(result).erase(xinteger_detail<XInteger>::words(result).begin(), xinteger_detail<XInteger>::words(result).begin() + shiftAmount);
+            // (shifted out completely: the sign remains (0 or -1))
+            if (xinteger_detail<XInteger>::words(result).empty())
+                xinteger_detail<XInteger>::words(result).push_back(negative ? ~xinteger_t<XInteger>::Zero : xinteger_t<XInteger>::Zero);
+        }
         else
         {
             std::copy(xinteger_detail<XInteger>::words(result).begin() + shiftAmount, xinteger_detail<XInteger>::words(result).end(), xinteger_detail<XInteger>::words(result).begin());
@@ -1089,8 +1235,8 @@ namespace neonumeric
         {
             if constexpr (!xinteger_traits<XInteger>::FixedSize)
             {
-                if (xinteger_detail<XInteger>::words(result).back() != xinteger_t<XInteger>::Zero)
-                    xinteger_detail<XInteger>::words(result).push_back(xinteger_t<XInteger>::Zero);
+                // (room for the bits shifted out of the most significant word: the sign extends into it)
+                xinteger_detail<XInteger>::words(result).push_back(xinteger_detail<XInteger>::is_negative(result) ? ~xinteger_t<XInteger>::Zero : xinteger_t<XInteger>::Zero);
             }
             auto const end = xinteger_detail<XInteger>::words(result).rend();
             auto const last = (xinteger_detail<XInteger>::words(result).rbegin() != end ?
@@ -1108,10 +1254,7 @@ namespace neonumeric
         shiftAmount >>= bitIndexShift;
 
         if constexpr (!xinteger_traits<XInteger>::FixedSize)
-        {
-            if (xinteger_detail<XInteger>::words(result).back() == xinteger_t<XInteger>::Zero)
-                xinteger_detail<XInteger>::words(result).pop_back();
-        }
+            xinteger_detail<XInteger>::magnitude(result); // (removes a most significant word that only extends the sign)
 
         if (shiftAmount == xinteger_t<XInteger>::Zero)
             return result;
