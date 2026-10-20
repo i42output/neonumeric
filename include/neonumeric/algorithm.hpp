@@ -164,6 +164,7 @@ namespace neonumeric
         static void set_positive(XInteger& aLhs, bool aPositive = true) { aLhs.set_positive(aPositive); }
         static void set_negative(XInteger& aLhs, bool aNegative = true) { aLhs.set_negative(aNegative); }
         static bool has_repetend(XInteger const& aLhs) { return aLhs.has_repetend(); }
+        static bool is_signalled(XInteger const& aLhs) { return aLhs.is_signalled(); }
         static const neonumeric::repetend& repetend(XInteger const& aLhs) { return aLhs.repetend(); }
         static neonumeric::repetend& repetend(XInteger& aLhs) { return aLhs.repetend(); }
         static XInteger unpack(XInteger const& aLhs, word_t aMagntitudeInBits) { return aLhs.unpack(aMagntitudeInBits); }
@@ -200,14 +201,23 @@ namespace neonumeric
         as_argument_t<Rhs> rhs;
     };
 
+    // (the unpacked arguments of operations on packed integers (see as_argument and as_arguments): thread-local, found only when 
+    // they are needed (finding a thread-local is not free))
+    template <typename XInteger, int Which>
+    inline XInteger& unpacked_argument()
+    {
+        thread_local XInteger arg;
+        return arg;
+    }
+
     template <typename XInteger, typename Arg>
     inline argument<Arg> as_argument(Arg&& aArg)
     {
-        thread_local XInteger arg;
         if (!xinteger_detail<XInteger>::has_repetend(aArg))
             return argument<Arg>{ aArg };
         else
         {
+            auto& arg = unpacked_argument<XInteger, 0>();
             arg = xinteger_detail<XInteger>::unpack(aArg, xinteger_detail<XInteger>::magnitude_in_bits(aArg));
             return argument<Arg>{ arg };
         }
@@ -216,11 +226,11 @@ namespace neonumeric
     template <typename XInteger, typename Lhs, typename Rhs>
     inline arguments<Lhs, Rhs> as_arguments(Lhs&& aLhs, Rhs&& aRhs)
     {
-        thread_local XInteger lhs;
-        thread_local XInteger rhs;
         if (!xinteger_detail<XInteger>::has_repetend(aLhs) && !xinteger_detail<XInteger>::has_repetend(aRhs))
             return arguments<Lhs, Rhs>{ aLhs, aRhs };
-        else if (xinteger_detail<XInteger>::has_repetend(aLhs) && !xinteger_detail<XInteger>::has_repetend(aRhs))
+        auto& lhs = unpacked_argument<XInteger, 1>();
+        auto& rhs = unpacked_argument<XInteger, 2>();
+        if (xinteger_detail<XInteger>::has_repetend(aLhs) && !xinteger_detail<XInteger>::has_repetend(aRhs))
         {
             lhs = xinteger_detail<XInteger>::unpack(aLhs, xinteger_detail<XInteger>::magnitude_in_bits(aRhs));
             return arguments<Lhs, Rhs>{ lhs, aRhs };
@@ -243,12 +253,24 @@ namespace neonumeric
     inline XInteger add_algorithm_0(const XInteger& aLhs, const XInteger& aRhs, bool& aOverflow)
     {
         XInteger result = aLhs;
-        return add_algorithm_0(result, aRhs, aOverflow);
+        add_algorithm_0(result, aRhs, aOverflow);
+        return result; // (not a copy of the reference that the other overload returns)
     }
     
     template <typename XInteger>
     inline XInteger& add_algorithm_0(XInteger& aLhs, const XInteger& aRhs, bool& aOverflow)
     {
+        // (neither packed, nor the same integer: added as they are (as_arguments would copy the right operand))
+        if (!xinteger_detail<XInteger>::has_repetend(aLhs) && !xinteger_detail<XInteger>::has_repetend(aRhs) && &aLhs != &aRhs)
+        {
+            add_algorithm_1(aLhs, aRhs, aOverflow);
+            if constexpr (xinteger_t<XInteger>::IsSigned)
+            {
+                if (xinteger_detail<XInteger>::is_negative(aLhs) & !xinteger_detail<XInteger>::is_sign_bit_set(aLhs))
+                    xinteger_detail<XInteger>::set_positive(aLhs);
+            }
+            return aLhs;
+        }
         auto args = as_arguments<XInteger>(aLhs, aRhs);
         auto& lhs = args.lhs;
         auto const& rhs = args.rhs;
@@ -277,6 +299,21 @@ namespace neonumeric
         architecture_t::word_t carry = xinteger_t<XInteger>::Zero;
         auto const end = previousMagnitude;
         typename xinteger_t<XInteger>::word_index_t index = 0u;
+        if constexpr (!xinteger_traits<XInteger>::FixedSize)
+        {
+            // (neither is signalled: their words, sign extended, directly (the result's are its own: the left operand's, with as many
+            // words as the sum (they are sized first, so the right operand's are found after, in case it is the left operand)))
+            if (end > xinteger_t<XInteger>::Zero && !xinteger_detail<XInteger>::is_signalled(aLhs) && !xinteger_detail<XInteger>::is_signalled(aRhs))
+            {
+                xinteger_detail<XInteger>::word(result, static_cast<typename xinteger_t<XInteger>::word_index_t>(end - 1u));
+                auto* const r = xinteger_detail<XInteger>::words(result).data();
+                auto const& rhsWords = xinteger_detail<XInteger>::words(aRhs);
+                auto const rhsSize = static_cast<typename xinteger_t<XInteger>::word_index_t>(rhsWords.size());
+                auto const rhsExtension = xinteger_detail<XInteger>::is_positive(aRhs) ? xinteger_t<XInteger>::Zero : ~xinteger_t<XInteger>::Zero;
+                for (; index < end; ++index)
+                    r[index] = xinteger_detail<XInteger>::add_words(r[index], index < rhsSize ? rhsWords[index] : rhsExtension, carry);
+            }
+        }
         while (index < end)
         {
             auto lhs = xinteger_detail<XInteger>::cword(aLhs, index);
@@ -315,7 +352,8 @@ namespace neonumeric
     inline XInteger subtract_algorithm_0(const XInteger& aLhs, const XInteger& aRhs, bool& aOverflow)
     {
         XInteger result = aLhs;
-        return subtract_algorithm_0(result, aRhs, aOverflow);
+        subtract_algorithm_0(result, aRhs, aOverflow);
+        return result; // (not a copy of the reference that the other overload returns)
     }
 
     template <typename XInteger>

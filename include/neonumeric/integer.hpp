@@ -160,7 +160,6 @@ namespace neonumeric
             iMagnitudeInBits{ aOther.iMagnitudeInBits },
             iRepetend{ aOther.iRepetend }
         {
-            words() = aOther.words();
         }
         xinteger(xinteger&& aOther) :
             iWords{ std::move(aOther.iWords) },
@@ -280,10 +279,16 @@ namespace neonumeric
                     return true;
                 else if (aLhs.is_positive() && aRhs.is_negative())
                     return false;
-                else if (aLhs.is_positive() && aRhs.is_positive())
-                    return aLhs.to_unsigned(true) < aRhs.to_unsigned(true);
-                else
-                    return aLhs.to_unsigned(true) > aRhs.to_unsigned(true);
+                // (the same sign: their two's complement words, most significant first (sign extended), are in the same order as 
+                // their values)
+                for (auto i = std::max(aLhs.size(), aRhs.size()); i --> Zero;)
+                {
+                    auto const& lhs = aLhs.cword(i);
+                    auto const& rhs = aRhs.cword(i);
+                    if (lhs != rhs)
+                        return lhs < rhs;
+                }
+                return false;
             }
             if (aLhs.magnitude() < aRhs.magnitude())
                 return true;
@@ -856,15 +861,14 @@ namespace neonumeric
         {
             if (iMagnitude != std::nullopt)
                 return *iMagnitude;
-            auto i = aTruncate ? std::find_if(words().rbegin(), words().rend(), [this](auto const& w)
-            {
-                if (is_positive())
-                    return w != Zero;
-                else
-                    return w != ~Zero;
-            }) : words().rbegin();
-            auto msw = static_cast<std::size_t>(i - words().rbegin());
-            msw = (msw < words().size() ? words().size() - 1u - msw : 0u);
+            // (its most significant word that is not a sign extension's (if aTruncate, else its last))
+            auto const& w = words();
+            auto const extension = is_positive() ? Zero : ~Zero;
+            auto i = w.size();
+            if (aTruncate)
+                while (i > 0u && w[i - 1u] == extension)
+                    --i;
+            std::size_t msw = (i > 0u ? i - 1u : 0u);
             if constexpr (IsSigned)
                 if (msw + 1u < words().size() && 
                     ((is_negative() && ((cword(static_cast<word_index_t>(msw)) & architecture_t::SignBit) != architecture_t::SignBit)) || 
@@ -873,7 +877,7 @@ namespace neonumeric
             iMagnitude = msw + 1u;
             if constexpr (!FixedSize)
             {
-                if (aTruncate)
+                if (aTruncate && iWords->size() != *iMagnitude)
                     iWords->resize(*iMagnitude);
             }
             return *iMagnitude;
